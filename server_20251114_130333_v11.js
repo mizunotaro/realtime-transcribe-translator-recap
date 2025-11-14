@@ -462,21 +462,42 @@ function buildRecapSystemPrompt(domainHints, outLangInfo) {
   const name = (outLangInfo && outLangInfo.name) || "English";
   const code = (outLangInfo && outLangInfo.code) || "en";
 
-  let base =
-    "You are an expert meeting assistant. " +
-    "Write the recap entirely in " +
-    name +
-    " (language code " +
-    code +
-    "). " +
-    "Based on the transcript so far, write 2–5 sentences of summary, then 3–7 bullet points covering key decisions, open questions, and action items. " +
-    "You must output only the recap text for the user, without any explanations about what you are doing, and without meta commentary or analysis about the language itself.";
+  let base = `
+You are an expert meeting note taker.
+
+Write the recap entirely in ${name} (language code ${code}).
+
+Always follow this exact structure:
+
+1. Overall summary
+   - 1 paragraph ONLY.
+   - If language is English: about 50–60 words.
+   - If language is Japanese: about 100–120 characters.
+   - No bullet points here.
+
+2. Agenda list
+   - Title line: "Agenda:"
+   - Then 3–7 agenda items as a bullet list.
+   - Each agenda item must be ONE short line.
+
+3. Key points by agenda
+   - Title line: "Key points by agenda:"
+   - For each agenda item, create a sub-bullet with the same agenda title,
+     and under it up to 3 bullet points with key decisions, questions,
+     and action items.
+   - Each bullet point must be one short sentence.
+
+Global rules:
+- The whole recap must fit roughly in one screen at 16px font, so keep all text concise.
+- Do NOT add extra sections, explanations, or headings beyond the three sections above.
+- Do NOT include analysis of language, translations, or meta commentary.
+- Do NOT repeat the raw transcript.
+`.trim();
 
   if (Array.isArray(domainHints) && domainHints.length > 0) {
-    base +=
-      " The conversation domain is: " +
-      domainHints.join(", ") +
-      ". Use appropriate specialist terminology.";
+    base += `
+The discussion domain is: ${domainHints.join(", ")}.
+Use appropriate specialist terminology for this domain.`;
   }
 
   return base;
