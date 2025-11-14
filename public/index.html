@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>Realtime Transcription + Translation + Recap</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-store" />
+  <style>
+    :root {
+      --bg: #020617;
+      --bg-alt: #020617;
+      --panel: #020617;
+      --panel-border: #1f2937;
+      --panel-header: #020617;
+      --accent: #38bdf8;
+      --accent-soft: rgba(56,189,248,0.08);
+      --danger: #f97373;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --font-size: 16px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #0f172a 0, #020617 45%, #000 100%);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      border-bottom: 1px solid #111827;
+      background: rgba(15,23,42,0.88);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .topbar-left,
+    .topbar-center,
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .topbar-left { flex: 1 1 auto; min-width: 0; }
+    .topbar-center { flex: 0 0 auto; }
+    .topbar-right { flex: 0 0 auto; margin-left: auto; }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      margin-right: 6px;
+      background: #f97316;
+    }
+    .status-text {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 260px;
+    }
+    .btn {
+      border-radius: 999px;
+      border: 1px solid #1f2937;
+      padding: 6px 12px;
+      background: #020617;
+      color: var(--text);
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.05s ease, border-color 0.15s ease;
+      user-select: none;
+    }
+    .btn:hover { background: #020617; border-color: #334155; }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary {
+      background: linear-gradient(135deg,#22c55e,#16a9c7);
+      border-color: transparent;
+      color: #0b1120;
+    }
+    .btn-primary:hover { filter: brightness(1.05); }
+    .btn-danger {
+      background: linear-gradient(135deg,#fb7185,#f97316);
+      border-color: transparent;
+      color: #0b1120;
+    }
+    .btn.disabled,
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+      pointer-events: none;
+    }
+    .toggle-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .topbar select {
+      background: #020617;
+      border-radius: 999px;
+      border: 1px solid #1f2937;
+      color: var(--text);
+      font-size: 13px;
+      padding: 4px 10px;
+    }
+    .range-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    input[type="range"] {
+      accent-color: var(--accent);
+    }
+    .pill {
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      border: 1px solid #1f2937;
+      background: #020617;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .pill-ghost {
+      border-style: dashed;
+      opacity: 0.8;
+    }
+
+    .main {
+      flex: 1 1 auto;
+      display: flex;
+      padding: 8px 12px 10px;
+      gap: 10px;
+      min-height: 0;
+    }
+    .column {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      border-radius: 12px;
+      border: 1px solid var(--panel-border);
+      background: radial-gradient(circle at top left, #020617, #020617 45%, #000 120%);
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 8px 10px 6px;
+      border-bottom: 1px solid #111827;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .panel-title {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: #e5e7eb;
+    }
+    .panel-sub {
+      font-size: 11px;
+      color: var(--muted);
+      flex: 1 1 auto;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .panel-body {
+      padding: 10px;
+      font-size: var(--font-size);
+      line-height: 1.5;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      flex: 1 1 auto;
+    }
+    .panel-body p {
+      margin: 0 0 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px dashed rgba(148,163,184,0.25);
+    }
+    .panel-body p:last-child { border-bottom: none; }
+    .panel-body .chunk-id {
+      opacity: 0.6;
+      font-size: 0.8em;
+    }
+
+    .bottombar {
+      padding: 6px 10px 8px;
+      border-top: 1px solid #111827;
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      background: radial-gradient(circle at bottom, #020617, #000);
+    }
+    .bottombar span { white-space: nowrap; }
+    .bottombar .grow {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    @media (max-width: 1024px) {
+      .main {
+        flex-direction: column;
+      }
+      .column {
+        height: 33vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="status-dot" id="serverDot"></div>
+      <div class="status-text" id="serverStatus">Server: connecting…</div>
+    </div>
+    <div class="topbar-center">
+      <button class="btn btn-primary" id="btnMic" disabled>🎙 Start</button>
+      <label class="toggle-label">
+        <input type="checkbox" id="chkTranscribe" checked />
+        Transcribe
+      </label>
+    </div>
+    <div class="topbar-right">
+      <label class="toggle-label" for="langSelect">Lang</label>
+      <select id="langSelect">
+        <option value="en">EN</option>
+        <option value="ja">JP</option>
+        <option value="zh">CN</option>
+        <option value="fr">FR</option>
+        <option value="es">ES</option>
+      </select>
+      <div class="range-wrap">
+        Font
+        <input type="range" id="fontSizeRange" min="12" max="24" step="1" value="16" />
+        <span id="fontSizeLabel" class="pill">16px</span>
+      </div>
+      <button class="btn" id="btnRecap" disabled>📝 Recap</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="column">
+      <div class="panel-header">
+        <div class="panel-title">Raw Transcription</div>
+        <div class="panel-sub" id="rawSub">元の書き起こし（ASR 出力そのまま）</div>
+      </div>
+      <div class="panel-body" id="rawPane"></div>
+    </div>
+    <div class="column">
+      <div class="panel-header">
+        <div class="panel-title">Translation</div>
+        <div class="panel-sub" id="translationSub">Translated text</div>
+      </div>
+      <div class="panel-body" id="translationPane"></div>
+    </div>
+    <div class="column">
+      <div class="panel-header">
+        <div class="panel-title">Recap</div>
+        <div class="panel-sub" id="recapSub">Recap</div>
+      </div>
+      <div class="panel-body" id="recapPane"></div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <span class="grow" id="footerLeft">Web Audio で連続録音し、約 10 秒ごとに WAV チャンクとして送信します。</span>
+    <span id="footerRight" class="pill pill-ghost">Models: …</span>
+  </div>
+
+  <script>
+    const CHUNK_SECONDS = 10; // 将来的に .env 連動に変更予定
+
+    const serverDot = document.getElementById("serverDot");
+    const serverStatus = document.getElementById("serverStatus");
+    const btnMic = document.getElementById("btnMic");
+    const chkTranscribe = document.getElementById("chkTranscribe");
+    const langSelect = document.getElementById("langSelect");
+    const fontSizeRange = document.getElementById("fontSizeRange");
+    const fontSizeLabel = document.getElementById("fontSizeLabel");
+    const btnRecap = document.getElementById("btnRecap");
+
+    const rawPane = document.getElementById("rawPane");
+    const translationPane = document.getElementById("translationPane");
+    const recapPane = document.getElementById("recapPane");
+    const rawSub = document.getElementById("rawSub");
+    const translationSub = document.getElementById("translationSub");
+    const recapSub = document.getElementById("recapSub");
+    const footerLeft = document.getElementById("footerLeft");
+    const footerRight = document.getElementById("footerRight");
+
+    let sessionInfo = null;
+    let sessionId = null;
+    let targetLangCode = "ja"; // /session で上書き
+
+    let audioCtx = null;
+    let mediaStream = null;
+    let sourceNode = null;
+    let procNode = null;
+    let recording = false;
+    let buffers = [];
+    let chunkTimer = null;
+    let chunkCounter = 0;
+
+    const RECAP_INTERVAL_MS = 30000;
+    let recapAuto = false;
+    let recapTimerId = null;
+
+    function setServerState(state, text) {
+      if (state === "ready") {
+        serverDot.style.background = "#22c55e";
+      } else if (state === "error") {
+        serverDot.style.background = "#ef4444";
+      } else {
+        serverDot.style.background = "#f97316";
+      }
+      serverStatus.textContent = text;
+    }
+
+    function setFontSize(px) {
+      document.documentElement.style.setProperty("--font-size", px + "px");
+      fontSizeLabel.textContent = px + "px";
+    }
+
+    fontSizeRange.addEventListener("input", () => {
+      setFontSize(Number(fontSizeRange.value || 16));
+    });
+
+    function mapLangCodeToLabel(code) {
+      switch (code) {
+        case "ja": return "Japanese translation";
+        case "en": return "English translation";
+        case "zh": return "Chinese translation";
+        case "fr": return "French translation";
+        case "es": return "Spanish translation";
+        default: return "Translation";
+      }
+    }
+
+    function updateLangLabels() {
+      const label = mapLangCodeToLabel(targetLangCode);
+      translationSub.textContent = label;
+      recapSub.textContent = "Recap in " + label.replace(" translation", "");
+    }
+
+    function scrollToBottom(el) {
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function appendParagraph(el, text, meta) {
+      if (!text) return;
+      const p = document.createElement("p");
+      if (meta && meta.chunkId != null) {
+        const span = document.createElement("span");
+        span.className = "chunk-id";
+        span.textContent = "[#" + meta.chunkId + "] ";
+        p.appendChild(span);
+      }
+      p.appendChild(document.createTextNode(text));
+      el.appendChild(p);
+      scrollToBottom(el);
+    }
+
+    function setRecapText(text) {
+      recapPane.textContent = "";
+      appendParagraph(recapPane, text, null);
+    }
+
+    function updateRecapButton() {
+      if (recapAuto) {
+        btnRecap.classList.add("btn-primary");
+        btnRecap.textContent = "⏸ Recap";
+      } else {
+        btnRecap.classList.remove("btn-primary");
+        btnRecap.textContent = "📝 Recap";
+      }
+    }
+
+    btnRecap.addEventListener("click", () => {
+      recapAuto = !recapAuto;
+      if (recapAuto) {
+        requestRecap();
+        recapTimerId = setInterval(requestRecap, RECAP_INTERVAL_MS);
+      } else {
+        if (recapTimerId) {
+          clearInterval(recapTimerId);
+          recapTimerId = null;
+        }
+      }
+      updateRecapButton();
+    });
+
+    langSelect.addEventListener("change", () => {
+      targetLangCode = langSelect.value || targetLangCode;
+      updateLangLabels();
+    });
+
+    chkTranscribe.addEventListener("change", () => {
+      // OFF にしても録音は継続し、サーバには送らない
+    });
+
+    async function initSession() {
+      setServerState("connecting", "Server: connecting…");
+      try {
+        const resp = await fetch("/session");
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error || "session error");
+        sessionInfo = data;
+        sessionId = data.sessionId;
+        const outLang = data.translation && data.translation.default_output_lang;
+        if (outLang) {
+          targetLangCode = outLang;
+          const opts = Array.from(langSelect.options || []);
+          if (opts.some(o => o.value === outLang)) {
+            langSelect.value = outLang;
+          }
+        }
+        updateLangLabels();
+        btnMic.disabled = false;
+        btnRecap.disabled = false;
+
+        const asr = data.transcription || {};
+        const seg = data.translation || {};
+        const rc = data.recap || {};
+        footerRight.textContent =
+          "ASR: " + asr.model + " / Fallback: " + (asr.fallback_model || "-") +
+          " / Seg: " + (seg.model || "gpt-5-nano") +
+          " / Recap: " + (rc.model || "gpt-5-nano");
+
+        setServerState("ready", "Server: ready (session " + sessionId + ")");
+      } catch (err) {
+        console.error("initSession error", err);
+        setServerState("error", "Server error: " + err.message);
+      }
+    }
+
+    async function startMic() {
+      if (recording) return;
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1
+          }
+        });
+
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        sourceNode = audioCtx.createMediaStreamSource(mediaStream);
+        procNode = audioCtx.createScriptProcessor(4096, 1, 1);
+        buffers = [];
+
+        procNode.onaudioprocess = (ev) => {
+          const input = ev.inputBuffer.getChannelData(0);
+          buffers.push(new Float32Array(input));
+        };
+
+        sourceNode.connect(procNode);
+        procNode.connect(audioCtx.destination);
+
+        const intervalMs = CHUNK_SECONDS * 1000;
+        chunkTimer = setInterval(flushChunk, intervalMs);
+
+        recording = true;
+        btnMic.textContent = "⏹ Stop";
+        btnMic.classList.remove("btn-primary");
+        btnMic.classList.add("btn-danger");
+        footerLeft.textContent =
+          "Web Audio で連続録音中。約 " + CHUNK_SECONDS + " 秒ごとに WAV チャンクとして送信します。";
+      } catch (err) {
+        console.error("startMic error", err);
+        alert("マイクの初期化に失敗しました: " + err.message);
+      }
+    }
+
+    function stopMic() {
+      recording = false;
+      if (chunkTimer) {
+        clearInterval(chunkTimer);
+        chunkTimer = null;
+      }
+      if (procNode) {
+        procNode.disconnect();
+        procNode.onaudioprocess = null;
+        procNode = null;
+      }
+      if (sourceNode) {
+        sourceNode.disconnect();
+        sourceNode = null;
+      }
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+        mediaStream = null;
+      }
+      if (audioCtx) {
+        audioCtx.close();
+        audioCtx = null;
+      }
+      buffers = [];
+      btnMic.textContent = "🎙 Start";
+      btnMic.classList.remove("btn-danger");
+      btnMic.classList.add("btn-primary");
+      footerLeft.textContent = "Web Audio で連続録音し、約 " + CHUNK_SECONDS + " 秒ごとに WAV チャンクとして送信します。";
+    }
+
+    btnMic.addEventListener("click", () => {
+      if (!recording) startMic();
+      else stopMic();
+    });
+
+    function mergeFloat32(buffers) {
+      let total = 0;
+      for (const b of buffers) total += b.length;
+      const out = new Float32Array(total);
+      let offset = 0;
+      for (const b of buffers) {
+        out.set(b, offset);
+        offset += b.length;
+      }
+      return out;
+    }
+
+    function encodeWav(samples, sampleRate) {
+      const buffer = new ArrayBuffer(44 + samples.length * 2);
+      const view = new DataView(buffer);
+
+      function writeString(offset, string) {
+        for (let i = 0; i < string.length; i++) {
+          view.setUint8(offset + i, string.charCodeAt(i));
+        }
+      }
+
+      writeString(0, "RIFF");
+      view.setUint32(4, 36 + samples.length * 2, true);
+      writeString(8, "WAVE");
+
+      writeString(12, "fmt ");
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+
+      writeString(36, "data");
+      view.setUint32(40, samples.length * 2, true);
+
+      let offset = 44;
+      for (let i = 0; i < samples.length; i++, offset += 2) {
+        let s = Math.max(-1, Math.min(1, samples[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      }
+
+      return new Blob([view], { type: "audio/wav" });
+    }
+
+    function flushChunk() {
+      if (!recording) return;
+      if (!chkTranscribe.checked) {
+        buffers = [];
+        return;
+      }
+      if (!buffers.length) return;
+
+      const localBuffers = buffers;
+      buffers = [];
+
+      const samples = mergeFloat32(localBuffers);
+      if (!samples.length || !audioCtx) return;
+      const wav = encodeWav(samples, audioCtx.sampleRate);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result;
+        sendChunk(dataUrl, wav.type);
+      };
+      reader.readAsDataURL(wav);
+    }
+
+    async function sendChunk(dataUrl, mimeType) {
+      if (!sessionId) return;
+      const myId = ++chunkCounter;
+
+      try {
+        const resp = await fetch("/transcribe-chunk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId,
+            chunkId: myId,
+            audioBase64: dataUrl,
+            mimeType,
+            isLast: false,
+            languageHint: "auto",
+            domainHints: [],
+            targetLang: targetLangCode
+          })
+        });
+
+        const json = await resp.json();
+        if (!resp.ok || !json.ok) {
+          console.error("/transcribe-chunk error", json);
+          appendParagraph(rawPane, "[ERROR] Network or server error (chunk " + myId + ")", {
+            chunkId: myId
+          });
+          return;
+        }
+
+        const seg = json.segment || {};
+        appendParagraph(rawPane, seg.sourceText || "", { chunkId: seg.chunkId });
+        appendParagraph(translationPane, seg.translatedText || "", { chunkId: seg.chunkId });
+      } catch (err) {
+        console.error("sendChunk error", err);
+        appendParagraph(rawPane, "[ERROR] Network or server error (chunk " + myId + ")", {
+          chunkId: myId
+        });
+      }
+    }
+
+    async function requestRecap() {
+      if (!sessionId) return;
+      try {
+        const resp = await fetch("/recap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId,
+            domainHints: [],
+            targetLang: targetLangCode
+          })
+        });
+        const json = await resp.json();
+        if (!resp.ok || !json.ok) {
+          console.error("/recap error", json);
+          return;
+        }
+        const recap = json.recap || {};
+        setRecapText(recap.text || "");
+      } catch (err) {
+        console.error("requestRecap error", err);
+      }
+    }
+
+    (function init() {
+      setFontSize(Number(fontSizeRange.value || 16));
+      updateRecapButton();
+      initSession();
+    })();
+  </script>
+</body>
+</html>
